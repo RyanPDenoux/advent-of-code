@@ -4,8 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 
+	"github.com/ryanpdenoux/advent-of-code/utils"
 	"github.com/ryanpdenoux/advent-of-code/2023"
 )
 
@@ -19,10 +21,16 @@ var solutionMap = map[int]func(*os.File){
 var (
 	day = flag.Int("day",
 		0,
-		"day[n] to select for solution")
+		"day[n] to select for solution",
+	)
 	year = flag.Int("year",
 		2023,
-		"Year that solution exists")
+		"Year that solution exists",
+	)
+	debug = flag.Bool("debug",
+		false,
+		"Toggle Debugging logs for solution",
+	)
 )
 
 func pickDay() (int) {
@@ -34,24 +42,31 @@ func pickDay() (int) {
 	return day
 }
 
-func buildDataPath(day int) (string) {
-	dataPath := fmt.Sprintf("%d/day%d-input.txt", *year, day)
-	return dataPath
+func setupLogging(debug bool) {
+	opts := &slog.HandlerOptions{}
+	if debug {
+		opts.Level = slog.LevelDebug
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, opts))
+	slog.SetDefault(logger)
 }
 
 func main() {
 	flag.Parse()
+
+	setupLogging(*debug)
 
 	if *day == 0 {
 		*day = pickDay()
 	}
 
 	solution_func := solutionMap[*day]
-	dataPath := buildDataPath(*day)
+	dataPath := utils.BuildDataPath(*year, *day)
 	file, err := os.Open(dataPath)
 	if err != nil {
 		log.Fatalf("Could not open file %v: %v", dataPath, err)
 	}
+	defer file.Close()
+
 	solution_func(file)
-	file.Close()
 }

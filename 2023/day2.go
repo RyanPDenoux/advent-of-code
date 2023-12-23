@@ -3,8 +3,11 @@ package solution
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
+
+	"github.com/ryanpdenoux/advent-of-code/utils"
 )
 
 func Day2(file *os.File) {
@@ -65,8 +68,8 @@ func LookupIdent(ident string) TokenType {
 	return GAME
 }
 
-func newToken(tokenType TokenType, ch byte) Token {
-	return Token{Type: tokenType, Literal: string(ch)}
+func newToken(tokenType TokenType, ch byte) *Token {
+	return &Token{Type: tokenType, Literal: string(ch)}
 }
 
 type Rules struct {
@@ -103,7 +106,6 @@ func (r *Rules) Compare(other Rules) bool {
 type Game struct {
 	Id     int
 	Valid  bool
-	// Sets   []Rules  // TODO might be needed later
 	parser *Parser
 }
 
@@ -120,8 +122,8 @@ func (g *Game) solveGame(rules Rules) {
 // line based Game parser
 type Parser struct {
 	lexer *Lexer
-	curr  Token
-	peek  Token
+	curr  *Token
+	peek  *Token
 }
 
 func newParser(input string) *Parser {
@@ -136,13 +138,16 @@ func newParser(input string) *Parser {
 func (p *Parser) nextToken() {
 	p.curr = p.peek
 	p.peek = p.lexer.NextToken()
+	if p.curr != nil {
+		slog.Debug("Current token", "token", p.curr)
+	}
 }
 
 func (p *Parser) Parse() Rules {
 	rules := Rules{}
 
 	sets := p.parseSets()
-	// fmt.Printf("Sets: %v\n", sets)
+	slog.Debug("Sets of current game", "sets", sets)
 	for _, set := range(sets) {
 		rules.Update(set)
 	}
@@ -153,12 +158,8 @@ func (p *Parser) Parse() Rules {
 func (p *Parser) parseSets() []Rules {
 	results := []Rules{}
 
-	// NOTE for debugging
-	if p.currTokenIs(COMMENT) {return results}
-
 	for !p.currTokenIs(EOL) {
 		set := p.parseSet()
-		fmt.Printf("set: %v\n", set)
 		if set != nil {
 			results = append(results, *set)
 		}
@@ -211,7 +212,6 @@ func (p *Parser) parseResult() *Rules {
 	}
 
 	for !p.currTokenIs(SEMIC) {
-		fmt.Printf("Current Token: %v\n", p.curr)
 
 		if p.currTokenIs(EOL) {
 			return rules
@@ -265,8 +265,8 @@ func (l *Lexer) readChar() {
 	l.readPos += 1
 }
 
-func (l *Lexer) NextToken() Token {
-	var tok Token
+func (l *Lexer) NextToken() *Token {
+	tok := &Token{}
 
 	l.skipWhitespace()
 
@@ -283,11 +283,11 @@ func (l *Lexer) NextToken() Token {
 		tok.Type = EOL
 		tok.Literal = ""
 	default:
-		if isLetter(l.ch) {  // Only returns Game or Colors
+		if utils.IsLetter(l.ch) {  // Only returns Game or Colors
 			tok.Literal = l.readIdentifier()
 			tok.Type = LookupIdent(tok.Literal)
 			return tok
-		} else if isDigit(l.ch) {
+		} else if utils.IsDigit(l.ch) {
 			tok.Type = VALUE
 			tok.Literal = l.readNumber()
 			return tok
@@ -307,7 +307,7 @@ func (l *Lexer) skipWhitespace() {
 
 func (l *Lexer) readIdentifier() string {
 	position := l.position
-	for isLetter(l.ch) {
+	for utils.IsLetter(l.ch) {
 		l.readChar()
 	}
 	return l.input[position:l.position]
@@ -315,16 +315,8 @@ func (l *Lexer) readIdentifier() string {
 
 func (l *Lexer) readNumber() string {
 	position := l.position
-	for isDigit(l.ch) {
+	for utils.IsDigit(l.ch) {
 		l.readChar()
 	}
 	return l.input[position:l.position]
-}
-
-func isLetter(char byte) bool {
-	return 'a' <= char && char <= 'z' || 'A' <= char && char <= 'Z'
-}
-
-func isDigit(char byte) bool {
-	return '0' <= char && char <= '9'
 }

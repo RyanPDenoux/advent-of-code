@@ -3,178 +3,179 @@ package solution
 import (
 	"bufio"
 	"fmt"
-	"math"
+	"log/slog"
+	"io"
 	"os"
-	// "slices"
-	"strconv"
+
+	"github.com/ryanpdenoux/advent-of-code/utils"
 )
 
 func Day3(file *os.File) {
-	var sum int
+	var (
+		parts   int = 0
+		gears   int = 0
+		gearAcc int = 1
+	)
 
-	// fmt.Printf("This is my file: %v\n", file)
 	schematic := newSchematicFromFile(file)
-	numbers := schematic.FindAllNumbers()
+	numbers := schematic.findPartNumbers()
 	for _, number := range numbers {
-		sum += number
+		parts += number
 	}
 
-	fmt.Printf("The sum of the engine parts is %d\n", sum)
+	fmt.Printf("The sum of the engine parts is %d\n", parts)
+
+	for _, v := range schematic.gears {
+		if len(v) <= 1 {
+			continue
+		}
+
+		for _, e := range v {
+			gearAcc *= e
+		}
+		gears += gearAcc
+		gearAcc = 1
+	}
+
+	fmt.Printf("The sum of gear ratios is %d\n", gears)
 }
 
 type EngineSchematic struct {
-	scanner *bufio.Scanner
-	prev    []byte
-	curr    []byte
-	next    []byte
+	reader *bufio.Reader
+	row    int
+	gears  map[Part][]int
+	prev   []byte
+	curr   []byte
+	next   []byte
+}
+
+type Part struct {
+	point Point
+	gear bool
+}
+
+
+type Point struct {
+	char byte
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("char: %v (%3d, %3d)", string(p.char), p.x, p.y)
 }
 
 // Creates an instance from a file handle and sets up the current and next lines
 func newSchematicFromFile(file *os.File) *EngineSchematic {
 	s := &EngineSchematic{}
-	s.scanner = bufio.NewScanner(file)
+	s.reader = bufio.NewReader(file)
+	s.row = 1
+	s.gears = make(map[Part][]int)
 	s.advanceLines()
 
 	return s
 }
 
 func (s *EngineSchematic) advanceLines() bool {
+	s.row++
 	curr := s.curr
 	next := s.next
 	s.curr = next
 	s.prev = curr
 
-	if s.scanner.Scan() {
-		s.next = s.scanner.Bytes()
-		return true
-	} else {
-		// fmt.Printf("Last line: %v\n", s.curr)
+	next, err := s.reader.ReadBytes('\n')
+	if err == io.EOF {
 		s.next = []byte{}
 		return true
 	}
+
+	s.next = next[:len(next)-1]
+	return true
 }
 
-func (s *EngineSchematic) FindAllNumbers() []int {
-	numbers := []int{}
+func (s *EngineSchematic) findPartNumbers() []int {
+	partNumbers := []int{}
 
+	// Here we must check if there is a current line
 	for s.advanceLines() && len(s.curr) > 0 {
-		rowNumbers := s.findNumbers()
-		numbers = append(numbers, rowNumbers...)
-		// for _, number := range(rowNumbers) {
-		// 	if !slices.Contains(numbers, number) {
-		// 		numbers = append(numbers, number)
-		// 	}
-		// }
+		rowNumbers := s.findRowNumbers()
+		partNumbers = append(partNumbers, rowNumbers...)
 	}
 
-	return numbers
+	return partNumbers
 }
 
-func (s *EngineSchematic) findNumbers() []int {
+func (s *EngineSchematic) findRowNumbers() []int {
 	numbers := []int{}
 
 	for i := 0; i < len(s.curr); i++ {
-		number, ok := determineNumber(s.curr, i)
+		number, ok := utils.FindNumberInBytes(s.curr, i)
 		if ok {
-			if s.isEnginePart(number, i) {
+			part, ok := s.checkNumber(number, i)
+			if ok {
 				numbers = append(numbers, number)
+				if part.gear {
+					s.gears[part] = append(s.gears[part], number)
+				}
 			}
-			// advance counter by length of digits
-			i += lengthOfInt(number)
+			// advance index by length of digits
+			i += utils.LengthOfInt(number) - 1
 		}
 	}
 
-	fmt.Printf("Found these numbers: %v\n", numbers)
+	slog.Debug("Found these part numbers", "partNumbers", numbers)
 	return numbers
 }
 
-func (s *EngineSchematic) isEnginePart(number, pos int) bool {
-	points := makeRange(pos-1, pos+lengthOfInt(number)+1)
-	validPoints := s.filterPoints(points)
+// Check area surrounding number
+func (s *EngineSchematic) checkNumber(number, pos int) (Part, bool) {
+	numberWidth := utils.LengthOfInt(number)
+	points := s.getPointsToCheck(pos, numberWidth)
+	slog.Debug("Checking points for symbols", "points", points)
 
-	if len(s.prev) > 0 && len(validPoints) > 0 {
-		if containsSymbol(s.prev, validPoints) {
-			return true
-		}
-	}
-	if len(s.next) > 0 && len(validPoints) > 0 {
-		if containsSymbol(s.next, validPoints) {
-			return true
-		}
-	}
-	if containsSymbol(s.curr, validPoints) {
-		return true
-	}
-
-	return false
+	return checkPoints(points)
 }
 
-func (s *EngineSchematic) filterPoints(points []int) []int {
-	filtered := []int{}
+func (s *EngineSchematic) getPointsToCheck(pos, width int) []Point {
+	points := []Point{}
 
+	for _, i := range utils.MakeRange(pos-1, pos+width+1) {
+		if i >= 0 && i < len(s.curr) {
+			point := Point{}
+			point.y = i
+
+			// first line if false
+			if len(s.prev) > 0 {
+				point.char = s.prev[i]
+				point.x = s.row - 1
+				points = append(points, point)
+			}
+
+			point.char = s.curr[i]
+			point.x = s.row
+			points = append(points, point)
+
+			// last line if false
+			if len(s.next) > 0 {
+				point.char = s.next[i]
+				point.x = s.row + 1
+				points = append(points, point)
+			}
+		}
+	}
+
+	return points
+}
+
+func checkPoints(points []Point) (Part, bool) {
 	for _, point := range points {
-		if point > 0 && point < len(s.curr) {
-			filtered = append(filtered, point)
+		if !utils.IsDigit(point.char) && point.char != '.' {
+			part := Part{point: point}
+			if point.char == '*' {
+				part.gear = true
+			}
+			return part, true
 		}
 	}
-
-	// fmt.Printf("Points before: %v\nPoints after: %v\n", points, filtered)
-	return filtered
+	return Part{}, false
 }
-
-func determineNumber(data []byte, pos int) (int, bool) {
-	var num []byte
-
-	// check length first to avoid index errors
-	for pos < len(data) && isDigit(data[pos]) {
-		num = append(num, data[pos])
-		pos++
-	}
-
-	intNum, err := strconv.Atoi(string(num))
-	if err != nil {
-		return 0, false
-	}
-
-	return intNum, true
-}
-
-func isSymbol(char byte) bool {
-	return !isDigit(char) && char != '.'
-	// return char != '.'
-}
-
-func lengthOfInt(number int) int {
-	return int(math.Log10(float64(number))) + 1
-}
-
-func makeRange(min, max int) []int {
-	a := make([]int, max-min)
-	for i := range a {
-		a[i] = min + i
-	}
-	return a
-}
-
-func containsSymbol(data []byte, points []int) bool {
-	// fmt.Printf("Check this data:%v\nWith these points:%v", data, points)
-	for _, point := range points {
-		if isSymbol(data[point]) {
-			return true
-		}
-	}
-	return false
-}
-
-// func dedupSlice(slice []int) []int {
-// 	exists := []int{}
-// 	deduped := []int{}
-
-// 	for _, number := range(slice) {
-// 		if !slices.Contains(exists, number) {
-// 			deduped = append(deduped, number)
-// 			exists = append(exists, number)
-// 		}
-// 	}
-// 	return deduped
-// }
