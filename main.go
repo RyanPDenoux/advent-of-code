@@ -8,14 +8,14 @@ import (
 	"os"
 
 	"github.com/ryanpdenoux/advent-of-code/utils"
-	"github.com/ryanpdenoux/advent-of-code/2023"
+	"github.com/ryanpdenoux/advent-of-code/solutions"
 )
 
 // register solution funcs
 var solutionMap = map[int]func(*os.File){
-	1: solution.Day1,
-	2: solution.Day2,
-	3: solution.Day3,
+	1: solutions.Day1,
+	2: solutions.Day2,
+	3: solutions.Day3,
 }
 
 var (
@@ -61,7 +61,7 @@ func main() {
 	}
 
 	solution_func := solutionMap[*day]
-	dataPath := utils.BuildDataPath(*year, *day)
+	dataPath := utils.BuildDataPath(*day)
 	file, err := os.Open(dataPath)
 	if err != nil {
 		log.Fatalf("Could not open file %v: %v", dataPath, err)

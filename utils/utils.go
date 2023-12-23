@@ -6,8 +6,8 @@ import (
 	"strconv"
 )
 
-func BuildDataPath(year, day int) (string) {
-	dataPath := fmt.Sprintf("%d/day%d-input.txt", year, day)
+func BuildDataPath(day int) (string) {
+	dataPath := fmt.Sprintf("solutions/day%d-input.txt", day)
 	return dataPath
 }
 
