@@ -17,6 +17,7 @@ var solutionMap = map[int]func(*os.File){
 	2: solutions.Day2,
 	3: solutions.Day3,
 	4: solutions.Day4,
+	5: solutions.Day5,
 }
 
 var (
@@ -32,6 +33,10 @@ var (
 		false,
 		"Toggle Debugging logs for solution",
 	)
+	quiet = flag.Bool("quiet",
+		false,
+		"Turn off logging output",
+	)
 )
 
 func pickDay() (int) {
@@ -43,10 +48,13 @@ func pickDay() (int) {
 	return day
 }
 
-func setupLogging(debug bool) {
+func setupLogging(debug, quiet bool) {
 	opts := &slog.HandlerOptions{}
 	if debug {
 		opts.Level = slog.LevelDebug
+	}
+	if quiet {
+		opts.Level = slog.LevelError
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
@@ -55,7 +63,7 @@ func setupLogging(debug bool) {
 func main() {
 	flag.Parse()
 
-	setupLogging(*debug)
+	setupLogging(*debug, *quiet)
 
 	if *day == 0 {
 		*day = pickDay()
