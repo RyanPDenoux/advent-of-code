@@ -25,8 +25,8 @@ func Day5(file *os.File) {
 
 	fmt.Printf("Plant here: %v\n", min)
 
-	// location := almanac.FindLocationFromRange()
-	// fmt.Printf("Next here: %v\n", location)
+	location := almanac.FindLocationFromRange()
+	fmt.Printf("Next here: %v\n", location)
 }
 
 type Almanac struct {
@@ -50,36 +50,42 @@ func (a *Almanac) FindLocationToPlant(seed int) int {
 	return location
 }
 
-// func (a *Almanac) FindLocationFromRange() int {
-// 	var minimum int
+func (a *Almanac) FindLocationFromRange() int {
+	minimum := 1024*1024*1024*1024
 
-// 	seeds := a.expandSeeds()
-// 	slog.Debug("Seeds", "seeds", seeds)
-// 	for _, seed := range seeds {
-// 		location := seed
-// 		for _, mapper := range a.mappers() {
-// 			location = mapper.findNext(location)
-// 		}
-// 		if location < minimum {
-// 			minimum = location
-// 		}
-// 	}
+	locations := a.SeedRanges()
+	for _, mapper := range a.mappers() {
+		nextLocations := []SeedRange{}
+		for _, location := range locations {
+			result := mapper.findNextRanges(location)
+			nextLocations = append(nextLocations, result...)
+		}
+		locations = nextLocations
+	}
 
-// 	return minimum
-// }
+	minimums := []int{}
+	for _, seed := range locations {
+		minimums = append(minimums, seed.Start)
+	}
 
-// func (a *Almanac) expandSeeds() []int {
-// 	seeds := []int{}
+	for _, min := range minimums {
+		if min < minimum {
+			minimum = min
+		}
+	}
 
-// 	for i := 0; i < len(a.seeds) - 1; i = i+2 {
-// 		start, length := a.seeds[i], a.seeds[i+1]
-// 		for i := start; i < start+length; i++ {
-// 			seeds = append(seeds, i)
-// 		}
-// 	}
+	return minimum
+}
 
-// 	return seeds
-// }
+func (a *Almanac) SeedRanges() []SeedRange {
+	ranges := []SeedRange{}
+
+	for i := 0; i < len(a.seeds); i = i + 2 {
+		ranges = append(ranges, SeedRange{a.seeds[i], a.seeds[i+1]})
+	}
+
+	return ranges
+}
 
 func (a *Almanac) mappers() []AlmanacMapper {
 	return []AlmanacMapper{
@@ -108,53 +114,74 @@ func (m *AlmanacMapper) findNext(item int) int {
 	return item
 }
 
+func (m *AlmanacMapper) findNextRanges(seeds SeedRange) []SeedRange {
+	var ranges []SeedRange
+
+	for _, instruction := range m.mappings {
+		ranges = instruction.transform(seeds)
+		if !(len(ranges) == 1 && ranges[0] == seeds) {
+			slog.Debug("Transformed range", "range", ranges, "before", seeds, "instruction", instruction)
+			return ranges
+		}
+	}
+
+	return ranges
+}
+
 type MappingInstruction struct {
-	destStart   int
-	sourceStart int
-	rangeLength int
+	Destination int
+	Source      int
+	Length      int
+}
+
+func (i *MappingInstruction) Transform() int {
+	return i.Destination - i.Source
 }
 
 func (i *MappingInstruction) findNext(item int) int {
 	var diff int
 
-	if item >= i.sourceStart && item < i.sourceStart+i.rangeLength {
-		diff = i.destStart - i.sourceStart
+	if item >= i.Source && item < i.Source+i.Length {
+		diff = i.Destination - i.Source
 		slog.Debug("Item Found in Mapping", "item", item, "destination", item+diff, "mapping", i)
 	} else {
 		diff = 0
 	}
 
-	return item+diff
+	return item + diff
+}
+
+func (i *MappingInstruction) transform(r SeedRange) []SeedRange {
+	if r.Start >= i.Source && r.Start+r.Length <= i.Source+i.Length { // Full Match
+		dest := SeedRange{Start: r.Start + i.Transform(), Length: r.Length}
+		return []SeedRange{dest}
+	} else if r.Start < i.Source && r.Start+r.Length > i.Source+i.Length { // 3-Part
+		pre := SeedRange{r.Start, i.Source - r.Start - 1}
+		dest := SeedRange{r.Start + i.Transform(), i.Length}
+		post := SeedRange{i.Source + i.Length + 1, (r.Start+r.Length) - (i.Source+i.Length) - 1}
+		return []SeedRange{pre, dest, post}
+	} else if (r.Start >= i.Source && r.Start+r.Length <= i.Source+i.Length) && r.Start+r.Length > i.Source+i.Length { // R-Part
+		dest := SeedRange{r.Start + i.Transform(), i.Source + i.Length - r.Start}
+		post := SeedRange{i.Source + i.Length + 1, (r.Start + r.Length) - (i.Source + i.Length) - 1}
+		return []SeedRange{dest, post}
+	} else if r.Start < i.Source && (r.Start+r.Length <= i.Source+i.Length && r.Start+r.Length >= i.Source) { // L-Part
+		pre := SeedRange{r.Start, i.Source - r.Start - 1}
+		dest := SeedRange{i.Source + i.Transform(), (r.Start + r.Length) - i.Source}
+		return []SeedRange{pre, dest}
+	} else { // No Match
+		return []SeedRange{r}
+	}
+}
+
+type SeedRange struct {
+	Start  int
+	Length int
 }
 
 // Parsing Logic
 type AlmanacParser struct {
 	scanner bufio.Scanner
 }
-
-// func createAlmanacParser(file *os.File, newline byte) *AlmanacParser {
-// 	p := &AlmanacParser{}
-// 	p.scanner = *bufio.NewScanner(file)
-// 	split := func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-// 		if atEOF && len(data) == 0 {
-// 			return 0, nil, nil
-// 		}
-
-// 		if atEOF {
-// 			return len(data), data, nil
-// 		}
-
-// 		for i := 0; i < (cap(data) - 1); i++ {
-// 			if bytes.Equal(data[i:i+2], []byte{newline, newline}) {
-// 				return i+2, data[:i+2], nil
-// 			}
-// 		}
-
-// 		return 0, nil, nil
-// 	}
-// 	p.scanner.Split(split)
-// 	return p
-// }
 
 func createAlmanacParser(file *os.File) *AlmanacParser {
 	p := &AlmanacParser{}
