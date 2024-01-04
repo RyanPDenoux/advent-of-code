@@ -18,6 +18,7 @@ var solutionMap = map[int]func(*os.File){
 	3: solutions.Day3,
 	4: solutions.Day4,
 	5: solutions.Day5,
+	6: solutions.Day6,
 }
 
 var (
