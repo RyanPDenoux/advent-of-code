@@ -46,3 +46,12 @@ func FindNumberInBytes(data []byte, pos int) (int, bool) {
 
 	return intNum, true
 }
+
+func Contains[T comparable](s []T, e T) bool {
+	for _, element := range s {
+		if e == element {
+			return true
+		}
+	}
+	return false
+}
